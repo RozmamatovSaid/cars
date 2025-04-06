@@ -1,5 +1,6 @@
-import 'package:cars/controller/car_controller.dart';
-import 'package:cars/view/screens/app_bar_widget.dart';
+import 'package:cars/controller/api_service.dart';
+import 'package:cars/model/car_model.dart';
+import 'package:cars/view/widgets/app_bar_widget.dart';
 import 'package:cars/view/widgets/cars_card.dart';
 import 'package:flutter/material.dart';
 
@@ -18,8 +19,11 @@ class _CarScreenState extends State<CarScreen> {
   final _priceController = TextEditingController();
   final _imageController = TextEditingController();
 
-  CarController carController = CarController();
+  ApiService apiService = ApiService();
   late List<TextEditingController> controllers = [];
+
+  bool isLoading = false;
+  var cars;
 
   @override
   void initState() {
@@ -39,6 +43,11 @@ class _CarScreenState extends State<CarScreen> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void refresh() {
+    cars = apiService.getCars();
+    setState(() {});
   }
 
   @override
@@ -97,7 +106,6 @@ class _CarScreenState extends State<CarScreen> {
                                       return null;
                                     },
                                   ),
-
                                   TextFormField(
                                     controller: _speedController,
                                     decoration: InputDecoration(
@@ -146,9 +154,9 @@ class _CarScreenState extends State<CarScreen> {
                                 ],
                               ),
                             ),
-
                             SizedBox(height: 20),
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 ElevatedButton(
                                   onPressed: () {
@@ -156,18 +164,25 @@ class _CarScreenState extends State<CarScreen> {
                                       i.clear();
                                     }
                                     Navigator.pop(context);
-                                    setState(() {});
                                   },
                                   child: Text('close'),
                                 ),
                                 ElevatedButton(
                                   onPressed: () {
                                     if (_formKey.currentState!.validate()) {
+                                      final car = CarModel(
+                                        model: _modelController.text.trim(),
+                                        price: num.parse(_priceController.text),
+                                        image: _imageController.text,
+                                        speed: int.parse(_speedController.text),
+                                        year: int.parse(_yearController.text),
+                                      );
+                                      apiService.addCar(car);
                                       for (var i in controllers) {
                                         i.clear();
                                       }
                                       Navigator.pop(context);
-                                      setState(() {});
+                                      refresh();
                                     }
                                   },
                                   child: Text('Save'),
@@ -182,30 +197,37 @@ class _CarScreenState extends State<CarScreen> {
             ),
       ),
       body: FutureBuilder(
-        future: carController.getCars(),
+        future: apiService.getCars(),
         builder: (context, snapshot) {
-          var cars = snapshot.data;
-          return snapshot.connectionState == ConnectionState.waiting
-              ? Center(child: CircularProgressIndicator())
-              : cars == null || (cars.isEmpty)
-              ? CircularProgressIndicator()
-              : ListView.builder(
-                padding: EdgeInsets.only(top: 20),
-                itemCount: cars.length,
-                itemBuilder: (context, index) {
-                  return Center(
-                    child: CarCard(
-                      image: cars[index].image,
-                      model: cars[index].model,
-                      year: cars[index].year,
-                      speed: cars[index].speed,
-                      price: cars[index].price,
-                      editOnPressed: () {},
-                      deleteOnPressed: () {},
-                    ),
-                  );
-                },
+          cars = snapshot.data;
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (cars == null || cars.isEmpty) {
+            return Center(child: Text("No cars available"));
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.only(top: 20),
+            itemCount: cars.length,
+            itemBuilder: (context, index) {
+              return Center(
+                child: CarCard(
+                  image: cars[index].image,
+                  model: cars[index].model,
+                  year: cars[index].year,
+                  speed: cars[index].speed,
+                  price: cars[index].price,
+                  editOnPressed: () {},
+                  deleteOnPressed: () {
+                    apiService.deleteCar(cars[index].id);
+                    refresh();
+                  },
+                ),
               );
+            },
+          );
         },
       ),
     );
